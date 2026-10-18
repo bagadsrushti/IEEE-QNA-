@@ -14,10 +14,6 @@ const MainApp = () => {
   const [isReclusterOpen, setIsReclusterOpen] = useState(false);
   const { isAuthenticated } = useAuth();
 
-  const handleExportCSV = () => {
-    window.open(clusterAPI.getExportUrl(), '_blank');
-  };
-
   const handleReclusterExecute = async (threshold) => {
     const res = await clusterAPI.recluster(threshold);
     return res.data;
@@ -31,7 +27,6 @@ const MainApp = () => {
           setActiveView={setActiveView}
           onOpenQR={() => setIsQROpen(true)}
           onOpenRecluster={() => setIsReclusterOpen(true)}
-          onExportCSV={handleExportCSV}
         />
       )}
 

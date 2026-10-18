@@ -9,7 +9,6 @@ import {
   Eye,
   Edit,
   Combine,
-  Download,
   QrCode,
   RefreshCw,
   Calendar,
@@ -158,10 +157,6 @@ const AdminDashboard = ({ onOpenQR, onOpenReclusterTrigger }) => {
     const res = await clusterAPI.recluster(threshold);
     loadAllData();
     return res.data;
-  };
-
-  const handleExportCSV = () => {
-    window.open(clusterAPI.getExportUrl(), '_blank');
   };
 
   // Filter clusters in-memory for fast search
@@ -423,14 +418,6 @@ const AdminDashboard = ({ onOpenQR, onOpenReclusterTrigger }) => {
               title="Configure and trigger re-clustering"
             >
               <Sliders className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={handleExportCSV}
-              className="p-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-              title="Export CSV"
-            >
-              <Download className="w-4 h-4" />
             </button>
           </div>
         </div>

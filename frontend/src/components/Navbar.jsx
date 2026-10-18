@@ -1,8 +1,8 @@
 import React from 'react';
-import { MessageSquare, QrCode, Shield, LogOut, RefreshCw, Download, Sparkles } from 'lucide-react';
+import { MessageSquare, QrCode, Shield, LogOut, RefreshCw, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const Navbar = ({ activeView, setActiveView, onOpenQR, onOpenRecluster, onExportCSV }) => {
+const Navbar = ({ activeView, setActiveView, onOpenQR, onOpenRecluster }) => {
   const { isAuthenticated, admin, logout } = useAuth();
 
   return (
@@ -45,15 +45,6 @@ const Navbar = ({ activeView, setActiveView, onOpenQR, onOpenRecluster, onExport
                 >
                   <RefreshCw className="w-4 h-4 mr-1.5 text-teal-600" />
                   <span className="hidden md:inline">AI</span> Recluster
-                </button>
-
-                <button
-                  onClick={onExportCSV}
-                  className="inline-flex items-center px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
-                  title="Download clustered questions CSV"
-                >
-                  <Download className="w-4 h-4 mr-1.5 text-slate-600" />
-                  <span className="hidden md:inline">Export</span> CSV
                 </button>
 
                 <button
