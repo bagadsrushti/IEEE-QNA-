@@ -66,7 +66,7 @@ A production-ready full-stack web application that collects questions from parti
                 │ HTTP REST (FastAPI)
 ┌───────────────▼────────────────┐
 │   Python AI Clustering Service │ (Port 8000)
-│   • sentence-transformers      │ Pretrained MiniLM-L12-v2
+│   • sentence-transformers      │ MiniLM-L12-v2 (ONNX int8)
 │   • PyTorch (CPU Optimized)    │ Agglomerative Clustering
 │   • Scikit-Learn               │ 384-dimensional Embeddings
 └────────────────────────────────┘
@@ -86,7 +86,7 @@ A production-ready full-stack web application that collects questions from parti
 
 #### 1.1 Python AI Service
 ```bash
-pip install fastapi uvicorn sentence-transformers torch scikit-learn numpy pydantic requests
+pip install -r ai_service/requirements.txt
 ```
 
 #### 1.2 Backend & Frontend
@@ -181,7 +181,7 @@ node scripts/test_system.js
 
 ### Limitations & Practical Considerations for Free Tier:
 1. **Cold Starts**: Render/Koyeb free instances spin down after 15 minutes of inactivity. First request may take ~30 seconds to wake up.
-2. **Model RAM**: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` consumes ~470MB RAM on CPU. It fits comfortably within Hugging Face Spaces (16GB) or standard 512MB free limits.
+2. **Model RAM**: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` originally needed ~1GB+ RAM with PyTorch. The service now runs an int8-quantized ONNX build (`onnx_int8/`, ~118MB) with onnxruntime + SentencePiece, using roughly 350MB RAM. Run `python export_model.py` once to regenerate `onnx_int8/`. Deploy the AI service with the included `Dockerfile` (Hugging Face Spaces, port 7860).
 3. **Graceful Degradation**: If the Python model service is temporarily sleeping or offline, the backend securely records participant questions with `processingStatus: 'pending'` and notifies the user gracefully rather than failing silently or faking keyword matching.
 
 ---

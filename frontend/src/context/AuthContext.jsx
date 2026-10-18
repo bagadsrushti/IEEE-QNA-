@@ -4,7 +4,14 @@ import { authAPI } from '../services/api';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [admin, setAdmin] = useState(null);
+  const [admin, setAdmin] = useState(() => {
+    try {
+      const stored = localStorage.getItem('cluster_ai_admin');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState(localStorage.getItem('cluster_ai_token'));
   const [loading, setLoading] = useState(true);
 
@@ -46,6 +53,10 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('cluster_ai_token');
     localStorage.removeItem('cluster_ai_admin');
+    localStorage.removeItem('cluster_ai_active_view');
+    try {
+      window.location.hash = '';
+    } catch {}
     setToken(null);
     setAdmin(null);
   };

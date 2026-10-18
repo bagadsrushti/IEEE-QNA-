@@ -77,8 +77,8 @@ const AdminDashboard = ({ onOpenQR, onOpenReclusterTrigger }) => {
     loadAllData();
   }, [sortBy, langFilter]);
 
-  const loadAllData = async () => {
-    setLoading(true);
+  const loadAllData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
     try {
       const [statsRes, clustersRes] = await Promise.all([
         statsAPI.getOverview(),
@@ -93,9 +93,11 @@ const AdminDashboard = ({ onOpenQR, onOpenReclusterTrigger }) => {
         setClusters(clustersRes.data.clusters);
       }
     } catch (err) {
-      console.error('Failed to load dashboard data:', err);
+      if (!isBackground) {
+        console.error('Failed to load dashboard data:', err);
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
@@ -119,6 +121,31 @@ const AdminDashboard = ({ onOpenQR, onOpenReclusterTrigger }) => {
       loadQuestionsStream();
     }
   }, [activeTab, langFilter, searchQuery]);
+
+  // Live real-time polling every 3 seconds: automatically updates stats & clusters when new questions arrive
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // Don't poll while an action modal (edit, merge, move, recluster) is open
+      if (!clusterToEdit && !clusterToMerge && !questionToMove && !isReclusterOpen) {
+        loadAllData(true);
+
+        if (activeTab === 'questions') {
+          loadQuestionsStream();
+        }
+
+        // If deep-dive modal is currently open, refresh its questions seamlessly
+        if (selectedClusterDetails?.cluster?._id) {
+          clusterAPI.getDetails(selectedClusterDetails.cluster._id)
+            .then(res => {
+              if (res.data?.success) setSelectedClusterDetails(res.data);
+            })
+            .catch(() => {});
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [sortBy, langFilter, activeTab, searchQuery, selectedClusterDetails, clusterToEdit, clusterToMerge, questionToMove, isReclusterOpen]);
 
   const handleViewCluster = async (cluster) => {
     try {
@@ -193,8 +220,12 @@ const AdminDashboard = ({ onOpenQR, onOpenReclusterTrigger }) => {
           </p>
         </div>
 
-        {/* AI Model Status Badge */}
-        <div className="flex items-center space-x-2">
+        {/* Status Badges */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-2"></span>
+            <span>Live Auto-Sync (3s)</span>
+          </div>
           <div className="flex items-center px-3 py-1.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse mr-2"></span>
             <span>AI Model: paraphrase-multilingual-MiniLM</span>

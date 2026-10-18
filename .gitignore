@@ -41,3 +41,8 @@ pnpm-debug.log*
 # Temporary scratch files
 scratch/
 tmp/
+
+# Intermediate full-precision export (470MB) - not needed for deployment
+onnx_fp32/
+
+onnx_int8/*.onnx

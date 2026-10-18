@@ -1,9 +1,9 @@
-fastapi==0.115.12
-uvicorn==0.34.0
-sentence-transformers==3.4.1
-torch
-scikit-learn
+fastapi
+uvicorn
+onnxruntime
+sentencepiece
+protobuf
 numpy
-pydantic
-requests
+scikit-learn
 psutil
+pydantic

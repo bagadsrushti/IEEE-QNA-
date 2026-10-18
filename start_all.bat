@@ -4,7 +4,11 @@ echo Starting Multilingual AI Question Clustering Platform
 echo ========================================================
 
 echo [1/3] Starting Python Multilingual AI Model Service...
-start "AI Model Service (FastAPI)" cmd /k "python -m uvicorn ai_service.app:app --host 127.0.0.1 --port 8000"
+if exist .venv\Scripts\activate.bat (
+    start "AI Model Service (FastAPI)" cmd /k "call .venv\Scripts\activate.bat && python -m uvicorn ai_service.app:app --host 127.0.0.1 --port 8000"
+) else (
+    start "AI Model Service (FastAPI)" cmd /k "python -m uvicorn ai_service.app:app --host 127.0.0.1 --port 8000"
+)
 
 timeout /t 5 /nobreak >nul
 

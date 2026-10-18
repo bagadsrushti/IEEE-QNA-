@@ -62,7 +62,10 @@ const Navbar = ({ activeView, setActiveView, onOpenQR, onOpenRecluster }) => {
                     <p className="text-[10px] text-slate-500">{admin?.email}</p>
                   </div>
                   <button
-                    onClick={logout}
+                    onClick={() => {
+                      logout();
+                      setActiveView('submit');
+                    }}
                     className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
                     title="Sign Out"
                   >

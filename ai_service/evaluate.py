@@ -1,6 +1,6 @@
 """
 Evaluation script for Multilingual Question Clustering
-Tests sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+Tests the ONNX int8 build of paraphrase-multilingual-MiniLM-L12-v2
 Across English, Hindi, Marathi, Hinglish, Marathi-English, and mixed languages.
 """
 
@@ -14,15 +14,12 @@ import numpy as np
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-import torch
-torch.set_num_threads(1)
-torch.set_num_interop_threads(1)
-
-from sentence_transformers import SentenceTransformer
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from app import OnnxEmbedder, DEFAULT_MODEL_DIR
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
 
-MODEL_NAME = os.getenv("MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+MODEL_NAME = os.getenv("MODEL_DIR", DEFAULT_MODEL_DIR)
 
 def run_evaluation():
     proc = psutil.Process(os.getpid())
@@ -34,9 +31,9 @@ def run_evaluation():
 
     t0 = time.time()
     print("\n[1/4] Loading pretrained model...")
-    model = SentenceTransformer(MODEL_NAME, device="cpu")
+    model = OnnxEmbedder(MODEL_NAME)
     load_time = time.time() - t0
-    m_dim = model.get_sentence_embedding_dimension()
+    m_dim = int(model.encode(["warm up"]).shape[1])
     post_load_rss = proc.memory_info().rss / (1024 * 1024)
     print(f"Model loaded in {load_time:.2f} seconds. (Dim: {m_dim}, Post-Load RSS: {post_load_rss:.1f} MB)")
 
@@ -71,8 +68,7 @@ def run_evaluation():
 
     texts = [d["text"] for d in dataset]
     print(f"\n[2/4] Generating semantic embeddings for {len(texts)} test questions...")
-    with torch.inference_mode():
-        embeddings = model.encode(texts, normalize_embeddings=True, batch_size=8)
+    embeddings = model.encode(texts, batch_size=8)
     sim_matrix = cosine_similarity(embeddings)
     post_infer_rss = proc.memory_info().rss / (1024 * 1024)
     print(f"Embeddings generated. Post-Inference RSS: {post_infer_rss:.1f} MB")
