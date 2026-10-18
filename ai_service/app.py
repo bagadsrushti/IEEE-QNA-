@@ -34,7 +34,7 @@ def get_model() -> SentenceTransformer:
     if model is None:
         t0 = time.time()
         print(f"Loading SentenceTransformer model: {MODEL_NAME}...")
-        model = SentenceTransformer(MODEL_NAME)
+        model = SentenceTransformer(MODEL_NAME,device="cpu")
         model_load_time = time.time() - t0
         print(f"Model loaded successfully in {model_load_time:.2f} seconds.")
     return model
@@ -118,7 +118,12 @@ def generate_embeddings(payload: EmbedRequest):
     
     m = get_model()
     # Normalize embeddings to unit length so dot product = cosine similarity
-    embeddings = m.encode(payload.texts, normalize_embeddings=True, show_progress_bar=False)
+    embeddings = m.encode(
+        payload.texts,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+        batch_size=8
+    )   
     embeddings_list = embeddings.tolist()
     
     return EmbedResponse(
@@ -200,7 +205,11 @@ def cluster_questions(payload: ClusterRequest):
             
     if missing_indices:
         missing_texts = [texts[i] for i in missing_indices]
-        computed = m.encode(missing_texts, normalize_embeddings=True)
+        computed = m.encode(
+            missing_texts,
+            normalize_embeddings=True,
+            batch_size=4
+        )
         for sub_idx, orig_idx in enumerate(missing_indices):
             raw_embeddings[orig_idx] = computed[sub_idx].tolist()
             
