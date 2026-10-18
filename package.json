@@ -1,0 +1,19 @@
+{
+  "name": "multilingual-ai-question-clustering",
+  "version": "1.0.0",
+  "description": "Multilingual AI Question Clustering Platform for English, Hindi, Marathi, and Hinglish",
+  "scripts": {
+    "install:backend": "npm --prefix backend install",
+    "install:frontend": "npm --prefix frontend install",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "start:ai": "python -m uvicorn ai_service.app:app --host 127.0.0.1 --port 8000",
+    "start:backend": "npm --prefix backend start",
+    "start:frontend": "npm --prefix frontend run dev",
+    "seed": "node scripts/seed_data.js",
+    "evaluate": "python ai_service/evaluate.py",
+    "test": "node scripts/test_system.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
