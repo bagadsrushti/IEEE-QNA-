@@ -3,8 +3,8 @@ import { Lock, Mail, Shield, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const AdminLoginPage = ({ onLoginSuccess, onBackToPublic }) => {
-  const [email, setEmail] = useState('admin@clusterai.org');
-  const [password, setPassword] = useState('Admin@12345');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -49,13 +49,6 @@ const AdminLoginPage = ({ onLoginSuccess, onBackToPublic }) => {
           <p className="text-xs text-slate-500 mt-1">Sign in to manage multilingual question clusters</p>
         </div>
 
-        {/* Demo credentials banner */}
-        <div className="mb-5 p-3 bg-teal-50/70 border border-teal-200 rounded-xl text-xs text-teal-900">
-          <p className="font-semibold text-teal-950">Default System Credentials:</p>
-          <p className="mt-0.5 text-teal-800 font-mono text-[11px]">Email: admin@clusterai.org</p>
-          <p className="text-teal-800 font-mono text-[11px]">Password: Admin@12345</p>
-        </div>
-
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -75,7 +68,7 @@ const AdminLoginPage = ({ onLoginSuccess, onBackToPublic }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                placeholder="admin@clusterai.org"
+                placeholder="admin@example.com"
                 required
               />
             </div>
