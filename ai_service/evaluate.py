@@ -5,29 +5,42 @@ Across English, Hindi, Marathi, Hinglish, Marathi-English, and mixed languages.
 """
 
 import sys
+import os
 import time
+import psutil
 import numpy as np
 
 # Ensure Windows terminal prints Hindi / Marathi / Unicode characters cleanly
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
+import torch
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
 
+MODEL_NAME = os.getenv("MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+
 def run_evaluation():
+    proc = psutil.Process(os.getpid())
     print("=" * 80)
     print("  MULTILINGUAL AI QUESTION CLUSTERING EVALUATION")
-    print("  Model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    print(f"  Model: {MODEL_NAME}")
+    print(f"  Initial RSS: {proc.memory_info().rss / (1024*1024):.1f} MB")
     print("=" * 80)
 
     t0 = time.time()
     print("\n[1/4] Loading pretrained model...")
-    model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    print(f"Model loaded in {time.time() - t0:.2f} seconds.")
+    model = SentenceTransformer(MODEL_NAME, device="cpu")
+    load_time = time.time() - t0
+    m_dim = model.get_sentence_embedding_dimension()
+    post_load_rss = proc.memory_info().rss / (1024 * 1024)
+    print(f"Model loaded in {load_time:.2f} seconds. (Dim: {m_dim}, Post-Load RSS: {post_load_rss:.1f} MB)")
 
-    # 1. Test Dataset with ground truth topics
+    # 1. Test Dataset with ground truth topics across English, Hindi, Marathi, Hinglish, Marathi-English
     dataset = [
         # Topic 1: DSA Learning Roadmap
         {"text": "Give me a roadmap for DSA.", "lang": "English", "topic": "DSA Roadmap"},
@@ -58,8 +71,11 @@ def run_evaluation():
 
     texts = [d["text"] for d in dataset]
     print(f"\n[2/4] Generating semantic embeddings for {len(texts)} test questions...")
-    embeddings = model.encode(texts, normalize_embeddings=True)
+    with torch.inference_mode():
+        embeddings = model.encode(texts, normalize_embeddings=True, batch_size=8)
     sim_matrix = cosine_similarity(embeddings)
+    post_infer_rss = proc.memory_info().rss / (1024 * 1024)
+    print(f"Embeddings generated. Post-Inference RSS: {post_infer_rss:.1f} MB")
 
     # 2. Semantic Similarity Evaluation Across Languages for Topic 1 (DSA Roadmap)
     print("\n[3/4] Cross-Lingual Semantic Similarity Matrix (DSA Roadmap Ground Truth):")
@@ -76,7 +92,6 @@ def run_evaluation():
                 sim = float(sim_matrix[i][j])
                 intra_dsa_sims.append(sim)
                 desc = f"{dataset[i]['lang']} vs {dataset[j]['lang']}"
-                # Truncate strings nicely
                 q1 = dataset[i]['text'][:26]
                 q2 = dataset[j]['text'][:26]
                 label = f"{desc}: '{q1}' ~ '{q2}'"
@@ -143,7 +158,7 @@ def run_evaluation():
     
     if pass_separation and pass_multilingual and pass_discrimination:
         print("\nALL MULTILINGUAL AI CLUSTERING CRITERIA PASSED SUCCESSFULLY!")
-        print("Model paraphrase-multilingual-MiniLM-L12-v2 is confirmed reliable for EN, HI, MR, and mixed languages.")
+        print(f"Model {MODEL_NAME} is confirmed reliable for EN, HI, MR, and mixed languages.")
         return 0
     else:
         print("\nNote: Some boundary cases observed. Threshold fine-tuning recommended.")

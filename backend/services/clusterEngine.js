@@ -61,7 +61,7 @@ class ClusterEngine {
     let highestSim = -1;
 
     for (const cluster of clusters) {
-      if (cluster.centroid && cluster.centroid.length === 384) {
+      if (cluster.centroid && Array.isArray(cluster.centroid) && questionDoc.embedding && cluster.centroid.length === questionDoc.embedding.length) {
         const sim = aiService.cosineSimilarity(questionDoc.embedding, cluster.centroid);
         if (sim > highestSim) {
           highestSim = sim;
@@ -73,11 +73,12 @@ class ClusterEngine {
     const langKey = questionDoc.detectedLanguage || 'en';
 
     // If matches an existing cluster above threshold
-    if (bestCluster && highestSim >= simThreshold) {
+    if (bestCluster && highestSim >= simThreshold && questionDoc.embedding) {
       // Update centroid using weighted average
       const count = bestCluster.questionCount || 1;
-      const newCentroid = new Array(384);
-      for (let i = 0; i < 384; i++) {
+      const dim = questionDoc.embedding.length;
+      const newCentroid = new Array(dim);
+      for (let i = 0; i < dim; i++) {
         newCentroid[i] = (bestCluster.centroid[i] * count + questionDoc.embedding[i]) / (count + 1);
       }
       bestCluster.centroid = this.normalizeVector(newCentroid);
@@ -218,9 +219,10 @@ class ClusterEngine {
     const totalCount = target.questionCount + source.questionCount;
     
     // Merge centroids
-    if (target.centroid && source.centroid) {
-      const mergedCentroid = new Array(384);
-      for (let i = 0; i < 384; i++) {
+    if (target.centroid && source.centroid && target.centroid.length === source.centroid.length) {
+      const dim = target.centroid.length;
+      const mergedCentroid = new Array(dim);
+      for (let i = 0; i < dim; i++) {
         mergedCentroid[i] = (target.centroid[i] * target.questionCount + source.centroid[i] * source.questionCount) / totalCount;
       }
       target.centroid = this.normalizeVector(mergedCentroid);

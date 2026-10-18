@@ -1,11 +1,19 @@
 import os
 import re
 import time
+import gc
+import psutil
 import numpy as np
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+# Optimize PyTorch CPU threading to minimize memory pool allocations
+import torch
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics.pairwise import cosine_similarity
@@ -14,7 +22,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 app = FastAPI(
     title="Multilingual AI Question Clustering Service",
     description="Embeddings and Semantic Clustering for English, Hindi, Marathi & Mixed Questions",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 app.add_middleware(
@@ -25,19 +33,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+MODEL_NAME = os.getenv("MODEL_NAME", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 model: Optional[SentenceTransformer] = None
 model_load_time: float = 0.0
+model_status: str = "unloaded"  # "ready" | "loading" | "error" | "unloaded"
+model_error: Optional[str] = None
+model_dimension: int = 384
 
 def get_model() -> SentenceTransformer:
-    global model, model_load_time
-    if model is None:
-        t0 = time.time()
-        print(f"Loading SentenceTransformer model: {MODEL_NAME}...")
-        model = SentenceTransformer(MODEL_NAME,device="cpu")
+    global model, model_load_time, model_status, model_error, model_dimension
+    if model is not None:
+        return model
+    if model_error and model is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI Model failed to load: {model_error}. Check server memory limits or Hugging Face connection."
+        )
+
+    model_status = "loading"
+    t0 = time.time()
+    try:
+        print(f"Loading SentenceTransformer model: {MODEL_NAME} (device=cpu, single-threaded)...")
+        loaded = SentenceTransformer(MODEL_NAME, device="cpu")
         model_load_time = time.time() - t0
-        print(f"Model loaded successfully in {model_load_time:.2f} seconds.")
-    return model
+        dim = getattr(loaded, "get_embedding_dimension", getattr(loaded, "get_sentence_embedding_dimension", lambda: 384))()
+        if dim:
+            model_dimension = int(dim)
+        model = loaded
+        model_status = "ready"
+        model_error = None
+        gc.collect()
+        print(f"Model loaded successfully in {model_load_time:.2f} seconds (dim={model_dimension}).")
+        return model
+    except (MemoryError, RuntimeError, Exception) as e:
+        model_status = "error"
+        model_error = str(e)
+        print(f"Error loading model {MODEL_NAME}: {e}")
+        gc.collect()
+        raise HTTPException(
+            status_code=503,
+            detail=f"Model initialization failed: {e}. Check system RAM constraints."
+        )
 
 # Pydantic Schemas
 class EmbedRequest(BaseModel):
@@ -87,7 +123,7 @@ class ClusterResponse(BaseModel):
 
 @app.on_event("startup")
 def startup_event():
-    # Warm up model on startup
+    # Warm up model safely on startup without crashing the API container
     try:
         get_model()
     except Exception as e:
@@ -98,37 +134,51 @@ def root():
     return {
         "service": "Multilingual AI Question Clustering Service",
         "model": MODEL_NAME,
-        "status": "active"
+        "status": model_status,
+        "is_ready": model is not None,
+        "embedding_dimension": model_dimension
     }
 
 @app.get("/health")
 def health():
-    is_ready = model is not None
+    rss_mb = 0.0
+    try:
+        proc = psutil.Process(os.getpid())
+        rss_mb = round(proc.memory_info().rss / (1024 * 1024), 2)
+    except Exception:
+        pass
+
     return {
-        "status": "ready" if is_ready else "loading",
+        "status": model_status,
+        "is_ready": model is not None,
         "model": MODEL_NAME,
+        "embedding_dimension": model_dimension,
+        "memory_rss_mb": rss_mb,
         "load_time_sec": round(model_load_time, 2),
-        "device": str(model.device) if model else "unloaded"
+        "device": str(model.device) if model else "unloaded",
+        "error": model_error
     }
 
 @app.post("/embed", response_model=EmbedResponse)
 def generate_embeddings(payload: EmbedRequest):
     if not payload.texts:
-        return EmbedResponse(embeddings=[], dimensions=384, count=0)
+        return EmbedResponse(embeddings=[], dimensions=model_dimension, count=0)
     
     m = get_model()
     # Normalize embeddings to unit length so dot product = cosine similarity
-    embeddings = m.encode(
-        payload.texts,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-        batch_size=8
-    )   
+    with torch.inference_mode():
+        embeddings = m.encode(
+            payload.texts,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+            batch_size=8
+        )
     embeddings_list = embeddings.tolist()
+    dim = len(embeddings_list[0]) if embeddings_list else model_dimension
     
     return EmbedResponse(
         embeddings=embeddings_list,
-        dimensions=len(embeddings_list[0]) if embeddings_list else 384,
+        dimensions=dim,
         count=len(embeddings_list)
     )
 
@@ -140,7 +190,8 @@ def compute_similarity(payload: SimilarityRequest, threshold: float = 0.68):
         emb1 = np.array(payload.embedding1).reshape(1, -1)
         emb2 = np.array(payload.embedding2).reshape(1, -1)
     elif payload.text1 and payload.text2:
-        embs = m.encode([payload.text1, payload.text2], normalize_embeddings=True)
+        with torch.inference_mode():
+            embs = m.encode([payload.text1, payload.text2], normalize_embeddings=True)
         emb1 = embs[0:1]
         emb2 = embs[1:2]
     else:
@@ -193,11 +244,11 @@ def cluster_questions(payload: ClusterRequest):
     m = get_model()
     texts = [q.text for q in questions]
     
-    # Ensure all questions have embeddings
+    # Ensure all questions have embeddings matching model dimension
     raw_embeddings = []
     missing_indices = []
     for idx, q in enumerate(questions):
-        if q.embedding and len(q.embedding) == 384:
+        if q.embedding and len(q.embedding) == model_dimension:
             raw_embeddings.append(q.embedding)
         else:
             raw_embeddings.append(None)
@@ -205,11 +256,12 @@ def cluster_questions(payload: ClusterRequest):
             
     if missing_indices:
         missing_texts = [texts[i] for i in missing_indices]
-        computed = m.encode(
-            missing_texts,
-            normalize_embeddings=True,
-            batch_size=4
-        )
+        with torch.inference_mode():
+            computed = m.encode(
+                missing_texts,
+                normalize_embeddings=True,
+                batch_size=4
+            )
         for sub_idx, orig_idx in enumerate(missing_indices):
             raw_embeddings[orig_idx] = computed[sub_idx].tolist()
             
@@ -322,7 +374,8 @@ def evaluate_benchmark():
                 [(text, lang, "Unrelated") for text, lang in unrelated_group]
                 
     texts = [item[0] for item in all_items]
-    embeddings = m.encode(texts, normalize_embeddings=True)
+    with torch.inference_mode():
+        embeddings = m.encode(texts, normalize_embeddings=True)
     sim_matrix = cosine_similarity(embeddings)
     
     # Measure intra-cluster similarities for DSA
@@ -359,6 +412,7 @@ def evaluate_benchmark():
     return {
         "status": "success",
         "model": MODEL_NAME,
+        "embedding_dimension": model_dimension,
         "dsa_multilingual_pairs": dsa_intra_sims,
         "metrics": {
             "avg_dsa_multilingual_similarity": round(avg_dsa_intra, 4),

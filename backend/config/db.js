@@ -18,6 +18,10 @@ const connectDB = async () => {
     console.log('[Database] No MONGODB_URI specified. Initializing in-memory MongoDB server...');
     const { MongoMemoryServer } = require('mongodb-memory-server');
     mongod = await MongoMemoryServer.create();
+    // Keep mongod process referenced in event loop on Windows
+    if (mongod._instanceInfo?.instance?.mongodProcess) {
+      mongod._instanceInfo.instance.mongodProcess.ref();
+    }
     const memUri = mongod.getUri();
     
     await mongoose.connect(memUri);

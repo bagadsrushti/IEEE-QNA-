@@ -82,11 +82,11 @@ const submitQuestion = async (req, res) => {
       });
     }
 
-    // Generate semantic embedding (384-d vector)
+    // Generate semantic embedding vector
     const [embedding] = await aiService.getEmbeddings([cleanText]);
 
-    if (!embedding || embedding.length !== 384) {
-      throw new Error('Failed to generate valid 384-dimensional embedding vector');
+    if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+      throw new Error('Failed to generate valid semantic embedding vector');
     }
 
     // Create question document
